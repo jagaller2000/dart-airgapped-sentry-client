@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+class _ReplayConfig {
+  static const int maxRetries = 5;
+  static const Duration defaultRetryDelay = Duration(seconds: 1);
+}
+
 void main(List<String> args) async {
-  // Read DSN from environment variable SENTRY_DSN or from the first argument.
   final dsn =
       Platform.environment['SENTRY_DSN'] ?? (args.isNotEmpty ? args[0] : null);
-
-  // Read log file path from environment variable SENTRY_LOG or from the second argument.
   final logFilePath =
       Platform.environment['SENTRY_LOG'] ?? (args.length > 1 ? args[1] : null);
 
@@ -26,13 +28,15 @@ void main(List<String> args) async {
 
   final appId = uri.path;
   final client = HttpClient();
+
   try {
     final lines = File(logFilePath).readAsLinesSync();
     for (final line in lines) {
       if (line.isEmpty) continue;
+
       final Map<String, dynamic> logMessage = jsonDecode(line);
       final Map<String, String> headers = Map<String, String>.from(
-        logMessage["headers"],
+        logMessage['headers'],
       );
 
       final endpoint = Uri(
@@ -42,22 +46,51 @@ void main(List<String> args) async {
         path: 'api$appId/envelope/',
       );
 
-      try {
-        final request = await client.postUrl(endpoint);
-        headers.forEach((name, value) {
-          request.headers.set(name, value);
-        });
+      final body = utf8.decode(logMessage['body'].cast<int>());
+      var attempt = 0;
 
-        final body = utf8.decode(logMessage["body"].cast<int>());
-        request.write(body);
+      while (true) {
+        attempt += 1;
+        try {
+          final request = await client.postUrl(endpoint);
+          headers.forEach((name, value) {
+            request.headers.set(name, value);
+          });
+          request.write(body);
 
-        final response = await request.close();
-        final responseBody = await response.transform(utf8.decoder).join();
-        print(
-          '{"result:": {"statusCode": ${response.statusCode}, "body": "$responseBody"}}',
-        );
-      } catch (error) {
-        print('{"error": "$error"}');
+          final response = await request.close();
+          final responseBody = await response.transform(utf8.decoder).join();
+
+          if (response.statusCode == 429 || response.statusCode == 503) {
+            final delay =
+                _parseRetryAfter(response.headers) ??
+                _ReplayConfig.defaultRetryDelay;
+
+            if (attempt >= _ReplayConfig.maxRetries) {
+              print(
+                '{"error": "rate limited after $attempt attempts", "statusCode": ${response.statusCode}, "body": "${_escapeJson(responseBody)}"}',
+              );
+              break;
+            }
+
+            print(
+              '{"warning": "rate limited, retrying after ${delay.inSeconds}s", "statusCode": ${response.statusCode}}',
+            );
+            await Future.delayed(delay);
+            continue;
+          }
+
+          print(
+            '{"result": {"statusCode": ${response.statusCode}, "body": "${_escapeJson(responseBody)}"}}',
+          );
+          break;
+        } catch (error) {
+          if (attempt >= _ReplayConfig.maxRetries) {
+            print('{"error": "$error"}');
+            break;
+          }
+          await Future.delayed(const Duration(seconds: 1));
+        }
       }
     }
   } catch (e) {
@@ -65,4 +98,30 @@ void main(List<String> args) async {
   } finally {
     client.close();
   }
+}
+
+Duration? _parseRetryAfter(HttpHeaders headers) {
+  final retryAfter = headers.value('retry-after');
+  if (retryAfter == null) return null;
+
+  final seconds = int.tryParse(retryAfter);
+  if (seconds != null) {
+    return Duration(seconds: seconds);
+  }
+
+  try {
+    final date = HttpDate.parse(retryAfter);
+    final delay = date.difference(DateTime.now().toUtc());
+    return delay.isNegative ? Duration.zero : delay;
+  } catch (_) {
+    return null;
+  }
+}
+
+String _escapeJson(String value) {
+  return value
+      .replaceAll(r'\', r'\\')
+      .replaceAll('"', r'\"')
+      .replaceAll('\n', r'\n')
+      .replaceAll('\r', r'\r');
 }
