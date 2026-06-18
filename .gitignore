@@ -7,3 +7,5 @@
 pubspec.lock
 
 logs.txt
+
+.env
