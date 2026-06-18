@@ -6,6 +6,6 @@
 # https://dart.dev/tools/pub/private-files#pubspec-lock.
 pubspec.lock
 
-logs.txt
+**.log
 
 .env
