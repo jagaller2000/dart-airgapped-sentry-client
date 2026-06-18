@@ -9,3 +9,5 @@ pubspec.lock
 **.log
 
 .env
+
+**.lock
