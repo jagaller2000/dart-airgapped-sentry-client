@@ -151,11 +151,3 @@ int _readLastSuccessfulLineIndex(String lockFilePath) {
 void _writeLastSuccessfulLineIndex(String lockFilePath, int lineIndex) {
   File(lockFilePath).writeAsStringSync(lineIndex.toString());
 }
-
-String _escapeJson(String value) {
-  return value
-      .replaceAll(r'\', r'\\')
-      .replaceAll('"', r'\"')
-      .replaceAll('\n', r'\n')
-      .replaceAll('\r', r'\r');
-}
