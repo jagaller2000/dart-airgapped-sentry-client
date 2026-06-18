@@ -68,25 +68,25 @@ void main(List<String> args) async {
 
             if (attempt >= _ReplayConfig.maxRetries) {
               print(
-                '{"error": "rate limited after $attempt attempts", "statusCode": ${response.statusCode}, "body": "${_escapeJson(responseBody)}"}',
+                '{"result":{"error":"rate limited after $attempt attempts","statusCode":${response.statusCode},"body":"${_escapeJson(responseBody)}"},"success":false}',
               );
               break;
             }
 
             print(
-              '{"warning": "rate limited, retrying after ${delay.inSeconds}s", "statusCode": ${response.statusCode}}',
+              '{"result":{"warning":"rate limited, retrying after ${delay.inSeconds}s","statusCode":${response.statusCode}},"success":false}',
             );
             await Future.delayed(delay);
             continue;
           }
 
           print(
-            '{"result": {"statusCode": ${response.statusCode}, "body": "${_escapeJson(responseBody)}"}}',
+            '{"result":{"statusCode":${response.statusCode},"body":"${_escapeJson(responseBody)}"},"success":true}',
           );
           break;
         } catch (error) {
           if (attempt >= _ReplayConfig.maxRetries) {
-            print('{"error": "$error"}');
+            print('{"result":{"error":"$error"},"success":false}');
             break;
           }
           await Future.delayed(const Duration(seconds: 1));
@@ -94,7 +94,7 @@ void main(List<String> args) async {
       }
     }
   } catch (e) {
-    print('{"error": "$e"}');
+    print('{"result":{"error":"$e"},"success":false}');
   } finally {
     client.close();
   }
