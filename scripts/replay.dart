@@ -18,6 +18,9 @@ void main(List<String> args) async {
     exit(64);
   }
 
+  final lockFilePath = '$logFilePath.lock';
+  final startLineIndex = _readLastSuccessfulLineIndex(lockFilePath);
+
   Uri uri;
   try {
     uri = Uri.parse(dsn);
@@ -31,8 +34,16 @@ void main(List<String> args) async {
 
   try {
     final lines = File(logFilePath).readAsLinesSync();
-    for (final line in lines) {
-      if (line.isEmpty) continue;
+    for (
+      var lineIndex = startLineIndex;
+      lineIndex < lines.length;
+      lineIndex++
+    ) {
+      final line = lines[lineIndex];
+      if (line.isEmpty) {
+        _writeLastSuccessfulLineIndex(lockFilePath, lineIndex);
+        continue;
+      }
 
       final Map<String, dynamic> logMessage = jsonDecode(line);
       final Map<String, String> headers = Map<String, String>.from(
@@ -48,6 +59,7 @@ void main(List<String> args) async {
 
       final body = utf8.decode(logMessage['body'].cast<int>());
       var attempt = 0;
+      var success = false;
 
       while (true) {
         attempt += 1;
@@ -83,6 +95,7 @@ void main(List<String> args) async {
           print(
             '{"result":{"statusCode":${response.statusCode},"body":"${_escapeJson(responseBody)}"},"success":true}',
           );
+          success = true;
           break;
         } catch (error) {
           if (attempt >= _ReplayConfig.maxRetries) {
@@ -91,6 +104,10 @@ void main(List<String> args) async {
           }
           await Future.delayed(const Duration(seconds: 1));
         }
+      }
+
+      if (success) {
+        _writeLastSuccessfulLineIndex(lockFilePath, lineIndex);
       }
     }
   } catch (e) {
@@ -116,6 +133,23 @@ Duration? _parseRetryAfter(HttpHeaders headers) {
   } catch (_) {
     return null;
   }
+}
+
+int _readLastSuccessfulLineIndex(String lockFilePath) {
+  final lockFile = File(lockFilePath);
+  if (!lockFile.existsSync()) return 0;
+
+  try {
+    final content = lockFile.readAsStringSync().trim();
+    final index = int.parse(content);
+    return index < 0 ? 0 : index + 1;
+  } catch (_) {
+    return 0;
+  }
+}
+
+void _writeLastSuccessfulLineIndex(String lockFilePath, int lineIndex) {
+  File(lockFilePath).writeAsStringSync(lineIndex.toString());
 }
 
 String _escapeJson(String value) {
