@@ -80,7 +80,7 @@ void main(List<String> args) async {
 
             if (attempt >= _ReplayConfig.maxRetries) {
               print(
-                '{"result":{"error":"rate limited after $attempt attempts","statusCode":${response.statusCode},"body":"${_escapeJson(responseBody)}"},"success":false}',
+                '{"result":{"error":"rate limited after $attempt attempts","statusCode":${response.statusCode},"body":"$responseBody"},"success":false}',
               );
               break;
             }
@@ -93,7 +93,7 @@ void main(List<String> args) async {
           }
 
           print(
-            '{"result":{"statusCode":${response.statusCode},"body":"${_escapeJson(responseBody)}"},"success":true}',
+            '{"result":{"statusCode":${response.statusCode},"body":"$responseBody"},"success":true}',
           );
           success = true;
           break;
