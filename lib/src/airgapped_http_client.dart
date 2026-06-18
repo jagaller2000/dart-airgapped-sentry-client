@@ -13,6 +13,7 @@ class AirgappedHttpClient implements Client {
   static final Future<Response> _responseOk = Future.value(Response('', 200));
   static final Future<String> _string = Future.value('');
   static final Future<Uint8List> _intList = Future.value(Uint8List(0));
+  static const String _eventIdKey = 'event_id';
 
   final RandomAccessFile _logFile;
 
@@ -107,7 +108,7 @@ class AirgappedHttpClient implements Client {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
       'headers': request.headers,
       'method': request.method,
-      'body': bodyJson,
+      'body': bytes,
       'url': request.url.toString(),
     };
 
@@ -115,10 +116,10 @@ class AirgappedHttpClient implements Client {
     List<List<int>> eventResponses = [];
 
     for (var event in bodyJson) {
-      if (!event.containsKey('event_id')) {
+      if (!event.containsKey(_eventIdKey)) {
         continue;
       }
-      final eventId = event['event_id'];
+      final eventId = event[_eventIdKey];
 
       eventResponses.add(_EventResponse(eventId).toInts());
     }

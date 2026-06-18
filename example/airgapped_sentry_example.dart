@@ -1,11 +1,15 @@
+import 'dart:io';
+
 import 'package:airgapped_sentry/airgapped_sentry.dart';
 import 'package:sentry/sentry.dart';
 
 Future<void> main() async {
   await Sentry.init((options) async {
-    options.dsn = 'https://airgapped.offline/my-example-app';
+    options.dsn = Platform.environment['SENTRY_DSN'];
     options.compressPayload = false;
-    options.httpClient = await AirgappedHttpClient.initialize('logs.txt');
+    options.httpClient = await AirgappedHttpClient.initialize(
+      Platform.environment['SENTRY_LOG'] ?? "sentry.log",
+    );
   }, appRunner: initApp);
 }
 

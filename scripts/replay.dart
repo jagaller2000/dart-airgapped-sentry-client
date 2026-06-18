@@ -1,18 +1,31 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:http/http.dart';
+void main(List<String> args) async {
+  // Read DSN from environment variable SENTRY_DSN or from the first argument.
+  final dsn =
+      Platform.environment['SENTRY_DSN'] ?? (args.isNotEmpty ? args[0] : null);
 
-void main() async {
-  String logFilePath = 'logs.txt';
+  // Read log file path from environment variable SENTRY_LOG or from the second argument.
+  final logFilePath =
+      Platform.environment['SENTRY_LOG'] ?? (args.length > 1 ? args[1] : null);
 
-  String dsn =
-      "https://6853a1fa429e78d4011ca8d9f1f8841e@sentry.lets-byte.it/39";
+  if (dsn == null || logFilePath == null) {
+    stderr.writeln('Usage: dart replay.dart <SENTRY_DSN> <SENTRY_LOG>');
+    stderr.writeln('Or set environment variables: SENTRY_DSN and SENTRY_LOG');
+    exit(64);
+  }
 
-  final uri = Uri.parse(dsn);
-  final appId = uri.path; // includes leading '/'
+  Uri uri;
+  try {
+    uri = Uri.parse(dsn);
+  } catch (e) {
+    stderr.writeln('Invalid SENTRY_DSN: $e');
+    exit(64);
+  }
 
-  final client = Client();
+  final appId = uri.path;
+  final client = HttpClient();
   try {
     final lines = File(logFilePath).readAsLinesSync();
     for (final line in lines) {
@@ -22,17 +35,6 @@ void main() async {
         logMessage["headers"],
       );
 
-      headers['X-Sentry-Auth'] = headers['X-Sentry-Auth']!.replaceAll(
-        'sentry_key=',
-        'sentry_key=${uri.userInfo}',
-      );
-
-      final List<String> body = [];
-
-      for (final chunk in logMessage["body"]) {
-        body.add(jsonEncode(chunk));
-      }
-
       final endpoint = Uri(
         scheme: uri.scheme,
         host: uri.host,
@@ -41,20 +43,25 @@ void main() async {
       );
 
       try {
-        final response = await client.post(
-          endpoint,
-          headers: headers,
-          body: "${body.join("\n")}\n",
-        );
+        final request = await client.postUrl(endpoint);
+        headers.forEach((name, value) {
+          request.headers.set(name, value);
+        });
+
+        final body = utf8.decode(logMessage["body"].cast<int>());
+        request.write(body);
+
+        final response = await request.close();
+        final responseBody = await response.transform(utf8.decoder).join();
         print(
-          'Response status: ${response.statusCode}, Body: ${response.body}',
+          '{"result:": {"statusCode": ${response.statusCode}, "body": "$responseBody"}}',
         );
       } catch (error) {
-        print('Error sending log: $error');
+        print('{"error": "$error"}');
       }
     }
   } catch (e) {
-    print('Error reading log file: $e');
+    print('{"error": "$e"}');
   } finally {
     client.close();
   }

@@ -5,12 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Example",
+            "name": "Dart Example",
             "request": "launch",
             "type": "dart",
             "program": "example/airgapped_sentry_example.dart",
             "flutterMode": "debug",
-        },  {
+        },
+        {
             "name": "Replay Example",
             "request": "launch",
             "type": "dart",
