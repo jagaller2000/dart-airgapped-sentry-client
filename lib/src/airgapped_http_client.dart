@@ -121,7 +121,9 @@ class AirgappedHttpClient implements Client {
       }
       final eventId = event[_eventIdKey];
 
+      // Assume there is only ever one event per envelope
       eventResponses.add(_EventResponse(eventId).toInts());
+      break;
     }
 
     Stream<List<int>> eventStream = Stream.fromIterable(eventResponses);
